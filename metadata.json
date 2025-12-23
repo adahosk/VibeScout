@@ -1,0 +1,7 @@
+{
+  "name": "VibeScout",
+  "description": "A context-aware venue explorer that uses AI to find the perfect 'vibe' for your next outing, focusing on atmosphere and experience over just ratings.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
