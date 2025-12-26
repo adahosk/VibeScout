@@ -18,8 +18,17 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place }) => {
     }
   };
 
+  const handleCardClick = () => {
+    if (place.mapsUrl) {
+      window.open(place.mapsUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
   return (
-    <div className="flex flex-col bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow group">
+    <div 
+      onClick={handleCardClick}
+      className="flex flex-col bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-all group cursor-pointer active:scale-[0.98]"
+    >
       <div className="p-4 flex-1">
         <div className="flex justify-between items-start mb-2">
           <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${getVibeColor(place.vibe)}`}>
@@ -30,7 +39,7 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place }) => {
           </span>
         </div>
         
-        <h3 className="text-lg font-bold text-slate-800 leading-tight mb-1">{place.name}</h3>
+        <h3 className="text-lg font-bold text-slate-800 leading-tight mb-1 group-hover:text-slate-900">{place.name}</h3>
         <p className="text-xs text-slate-500 line-clamp-1 mb-3">{place.address}</p>
         
         <div className="flex items-center gap-4 mb-3">
@@ -61,7 +70,8 @@ const PlaceCard: React.FC<PlaceCardProps> = ({ place }) => {
           href={place.mapsUrl} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="mt-4 block text-center py-2 bg-slate-900 text-white rounded-xl font-medium text-sm hover:bg-slate-800 transition-colors"
+          onClick={(e) => e.stopPropagation()} // Prevent card-click trigger
+          className="mt-4 block text-center py-2 bg-slate-900 text-white rounded-xl font-medium text-sm hover:bg-slate-800 transition-colors relative z-10 cursor-pointer"
         >
           View on Maps
         </a>

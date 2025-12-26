@@ -10,10 +10,30 @@ const VIBE_SYSTEM_INSTRUCTION = `
     1. Always use Google Maps grounding for up-to-date venue information.
     2. Analyze vibes based on reviews and context.
     3. JSON FORMAT REQUIREMENT:
-    If you find places, include a JSON block:
+    If you find places, you MUST include a JSON block with the following schema:
     {
-      "suggestions": [...],
-      "comparison": {...}
+      "suggestions": [
+        {
+          "id": "string",
+          "name": "string",
+          "address": "string",
+          "vibe": "Quiet/Work" | "Romantic" | "Party/Lively" | "Casual" | "Fancy/Upscale",
+          "vibeScore": number (0-10),
+          "distance": "string (e.g. 0.5 miles)",
+          "priceLevel": "string (e.g. $$$)",
+          "bestFor": "string",
+          "noiseLevel": "Low" | "Medium" | "High",
+          "summary": "string",
+          "rating": number,
+          "mapsUrl": "string (FULL GOOGLE MAPS URL)"
+        }
+      ],
+      "comparison": {
+        "headers": ["Venue A", "Venue B"],
+        "rows": [
+          {"feature": "Atmosphere", "values": ["Dimly lit, cozy", "Bright, industrial"]}
+        ]
+      }
     }
 `;
 
@@ -28,14 +48,13 @@ const IMAGE_SYSTEM_INSTRUCTION = `
     3. Analyze the "vibe" of the scene (e.g., "Lively Mediterranean street vibe").
     4. If the user asks for similar places, use your reasoning to suggest nearby spots.
     
-    If you identify a specific venue, include the JSON structure for it.
+    If you identify a specific venue, include the JSON structure as defined for VibeScout suggestions.
 `;
 
 export async function processConversation(
   messages: { role: 'user' | 'assistant', content: string }[],
   location: UserLocation | null
 ) {
-  // Always initialize a new GoogleGenAI instance right before the call as per guidelines.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const modelName = 'gemini-2.5-flash';
   
@@ -63,7 +82,6 @@ export async function processConversation(
     const groundingLinks: { title: string; url: string }[] = [];
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
     
-    // Extract Maps grounding URLs to display them on the web app as links.
     chunks.forEach((chunk: any) => {
       if (chunk.maps) {
         groundingLinks.push({
@@ -88,9 +106,7 @@ export async function analyzeImage(
   prompt: string,
   location: UserLocation | null
 ) {
-  // Always initialize a new GoogleGenAI instance right before the call.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  // Using Gemini 3 Pro for advanced image reasoning
   const modelName = 'gemini-3-pro-preview';
   
   try {
