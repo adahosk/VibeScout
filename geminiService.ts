@@ -2,70 +2,52 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { UserLocation, PlaceSuggestion, ComparisonMatrix, VibeType } from "./types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const VIBE_SYSTEM_INSTRUCTION = `
+    You are VibeScout, a high-end AI concierge that focuses on "Context over Content".
+    Your goal is to find venues based on atmosphere, vibe, and specific user needs.
+    
+    GUIDELINES:
+    1. Always use Google Maps grounding for up-to-date venue information.
+    2. Analyze vibes based on reviews and context.
+    3. JSON FORMAT REQUIREMENT:
+    If you find places, include a JSON block:
+    {
+      "suggestions": [...],
+      "comparison": {...}
+    }
+`;
+
+const IMAGE_SYSTEM_INSTRUCTION = `
+    You are a visual geolocation and vibe expert. 
+    Analyze the provided image to identify exactly where it was taken.
+    Look for: Landmarks, street signs, architectural styles, and unique vegetation.
+    
+    TASK:
+    1. Identify the location or most likely area.
+    2. Provide a Google Maps link if you can find a specific spot.
+    3. Analyze the "vibe" of the scene (e.g., "Lively Mediterranean street vibe").
+    4. If the user asks for similar places, use your reasoning to suggest nearby spots.
+    
+    If you identify a specific venue, include the JSON structure for it.
+`;
 
 export async function processConversation(
   messages: { role: 'user' | 'assistant', content: string }[],
   location: UserLocation | null
 ) {
-  const modelName = 'gemini-2.5-flash'; // Optimized for Maps Grounding
+  // Always initialize a new GoogleGenAI instance right before the call as per guidelines.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const modelName = 'gemini-2.5-flash';
   
-  const systemInstruction = `
-    You are VibeScout, a high-end AI concierge that focuses on "Context over Content".
-    Your goal is to find venues based on atmosphere, vibe, and specific user needs rather than just ratings.
-    
-    GUIDELINES:
-    1. Always use Google Maps grounding for up-to-date venue information.
-    2. Analyze vibes (Romantic, Quiet, Party, etc.) based on reviews and context.
-    3. If user intent is unclear, ask clarifying questions about cuisine, budget, distance, and vibe.
-    4. When presenting results, always provide:
-       - A natural language response explaining your choices.
-       - A structured JSON representation of the suggestions and a comparison matrix.
-    
-    JSON FORMAT REQUIREMENT:
-    If you find places, you MUST include a JSON block at the end of your response inside triple backticks with "json" tag.
-    The JSON should follow this structure:
-    {
-      "suggestions": [
-        {
-          "id": "unique-id",
-          "name": "Venue Name",
-          "address": "Full Address",
-          "vibe": "one of VibeType values",
-          "vibeScore": 1-10,
-          "distance": "e.g., 1.2 km",
-          "priceLevel": "$/$$/$$$/$$$$",
-          "bestFor": "Specific use case",
-          "noiseLevel": "Low/Medium/High",
-          "summary": "Short 1-sentence why it matches",
-          "rating": 4.5,
-          "mapsUrl": "Google Maps Link"
-        }
-      ],
-      "comparison": {
-        "headers": ["Venue A", "Venue B"],
-        "rows": [
-          { "feature": "Vibe", "values": ["Romantic", "Modern"] },
-          { "feature": "Best For", "values": ["Date Night", "Quick Meeting"] }
-        ]
-      }
-    }
-  `;
-
   try {
     const config: any = {
       tools: [{ googleMaps: {} }],
-      systemInstruction,
+      systemInstruction: VIBE_SYSTEM_INSTRUCTION,
     };
 
     if (location) {
       config.toolConfig = {
-        retrievalConfig: {
-          latLng: {
-            latitude: location.latitude,
-            longitude: location.longitude,
-          },
-        },
+        retrievalConfig: { latLng: { latitude: location.latitude, longitude: location.longitude } },
       };
     }
 
@@ -78,12 +60,58 @@ export async function processConversation(
       config,
     });
 
+    const groundingLinks: { title: string; url: string }[] = [];
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    
+    // Extract Maps grounding URLs to display them on the web app as links.
+    chunks.forEach((chunk: any) => {
+      if (chunk.maps) {
+        groundingLinks.push({
+          title: chunk.maps.title || 'View on Google Maps',
+          url: chunk.maps.uri
+        });
+      }
+    });
+
     return {
       text: response.text,
-      groundingChunks: response.candidates?.[0]?.groundingMetadata?.groundingChunks || []
+      groundingLinks
     };
   } catch (error) {
     console.error("Gemini API Error:", error);
+    throw error;
+  }
+}
+
+export async function analyzeImage(
+  imageData: string,
+  prompt: string,
+  location: UserLocation | null
+) {
+  // Always initialize a new GoogleGenAI instance right before the call.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // Using Gemini 3 Pro for advanced image reasoning
+  const modelName = 'gemini-3-pro-preview';
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: {
+        parts: [
+          { inlineData: { data: imageData.split(',')[1], mimeType: 'image/jpeg' } },
+          { text: prompt || "Identify the location in this image and describe its vibe. Provide a Google Maps link if possible." }
+        ]
+      },
+      config: {
+        systemInstruction: IMAGE_SYSTEM_INSTRUCTION,
+      },
+    });
+
+    return {
+      text: response.text,
+    };
+  } catch (error) {
+    console.error("Image Analysis Error:", error);
     throw error;
   }
 }
